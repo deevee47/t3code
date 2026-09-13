@@ -41,7 +41,7 @@ export function isBlockedFrameViolation(
  * A frame that never loads leaves a blank white pane, because its error page
  * belongs to the frame and not to us. Report the failure and offer a reload
  * rather than showing that empty pane. Remounting on `src` and on each reload
- * clears a stale failure and reloads a document the browser already cached.
+ * clears a stale failure and retries the request.
  */
 export function BrowserDocumentFrame(props: {
   readonly src: string;
@@ -80,27 +80,40 @@ function DocumentFrame(props: {
     return () => document.removeEventListener("securitypolicyviolation", onViolation);
   }, [props.src]);
 
+  // A frame reports nothing a parent can act on: a navigation that fails does
+  // not fire `error`, and the error page it commits is cross-origin. Ask the
+  // server the same question the frame is asking, which is one extra HEAD per
+  // document opened. A `blob:` document is already in memory and answers only
+  // GET, so there is nothing to ask about it.
+  useEffect(() => {
+    if (props.src.startsWith("blob:")) return;
+    const controller = new AbortController();
+    void fetch(props.src, { method: "HEAD", signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) setFailure("This document is no longer available.");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setFailure("Could not reach the environment serving this document.");
+        }
+      });
+    return () => controller.abort();
+  }, [props.src]);
+
   if (failure !== null) {
     return <FileSurfaceFailure message={failure} onRetry={props.onReload} />;
   }
 
   const className = "min-h-0 flex-1 border-0 bg-white";
-  const onError = () => setFailure("Unable to load this document.");
   return props.pdf ? (
     // oxlint-disable-next-line react/iframe-missing-sandbox
-    <iframe
-      src={`${props.src}${PDF_VIEWER_FRAGMENT}`}
-      title={props.title}
-      className={className}
-      onError={onError}
-    />
+    <iframe src={`${props.src}${PDF_VIEWER_FRAGMENT}`} title={props.title} className={className} />
   ) : (
     <iframe
       src={props.src}
       title={props.title}
       className={className}
       sandbox="allow-scripts allow-forms allow-popups allow-modals"
-      onError={onError}
     />
   );
 }
