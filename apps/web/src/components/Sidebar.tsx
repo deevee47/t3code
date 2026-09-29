@@ -4844,6 +4844,39 @@ export default function Sidebar() {
                                 }}
                               />,
                             );
+                            // With nothing active above, a collapsed shelf previews the
+                            // latest settled thread so the empty list still says where
+                            // you left off.
+                            if (
+                              !settledShelfExpanded &&
+                              settledThreads[0] &&
+                              activeThreads.length === 0 &&
+                              pinnedThreads.length === 0 &&
+                              visibleDraftSessionCount === 0
+                            ) {
+                              const lastSettled = settledThreads[0];
+                              items.push(
+                                <li key="settled-preview" className="list-none">
+                                  <button
+                                    type="button"
+                                    aria-label={`Last settled thread: ${lastSettled.title}`}
+                                    onClick={() =>
+                                      void navigateToThread(
+                                        scopeThreadRef(lastSettled.environmentId, lastSettled.id),
+                                      )
+                                    }
+                                    className="flex h-8 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground/45 transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-muted-foreground"
+                                  >
+                                    <span className="min-w-0 flex-1 truncate">
+                                      {lastSettled.title}
+                                    </span>
+                                    <span className="shrink-0 text-xs tabular-nums">
+                                      {settledTimeLabel(lastSettled)}
+                                    </span>
+                                  </button>
+                                </li>,
+                              );
+                            }
                             break;
                           case "settled-placeholder":
                             items.push(
