@@ -134,9 +134,14 @@ const newUuid = Crypto.Crypto.pipe(
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
 const findThread = (snapshot: OrchestrationShellSnapshot, threadId: string) => {
+  // Imported Hermes threads are `import:hermes:<session id>`; the session id alone works too.
   const matches = snapshot.threads.filter(
-    (thread) => thread.id === threadId || thread.id.startsWith(threadId),
+    (thread) =>
+      thread.id.startsWith(threadId) ||
+      thread.id.startsWith(`import:${HERMES_INSTANCE}:${threadId}`),
   );
+  const exact = matches.find((thread) => thread.id === threadId);
+  if (exact) return Effect.succeed(exact);
   if (matches.length === 1) return Effect.succeed(matches[0]!);
   return Effect.fail(
     new ThreadCliError({
@@ -188,7 +193,10 @@ const waitForThread = (server: LiveServer, threadId: ThreadId, printFrom: number
     }
   });
 
-const jsonFlag = Flag.boolean("json").pipe(Flag.withDescription("Print JSON."));
+const jsonFlag = Flag.boolean("json").pipe(
+  Flag.withDescription("Print JSON."),
+  Flag.withDefault(false),
+);
 const threadIdArgument = Argument.string("thread-id").pipe(
   Argument.withDescription("Thread id, or a unique prefix of it."),
 );
@@ -200,7 +208,10 @@ const listCommand = Command.make("list", {
     Flag.withDescription("Only T3 threads or only Hermes threads."),
     Flag.withDefault("all"),
   ),
-  archived: Flag.boolean("archived").pipe(Flag.withDescription("Include archived threads.")),
+  archived: Flag.boolean("archived").pipe(
+    Flag.withDescription("Include archived threads."),
+    Flag.withDefault(false),
+  ),
 }).pipe(
   Command.withDescription("List threads with their status: working, needs-approval, settled…"),
   Command.withHandler((flags) =>
@@ -281,6 +292,7 @@ const showCommand = Command.make("show", {
 
 const waitFlag = Flag.boolean("wait").pipe(
   Flag.withDescription("Wait for the agent to finish and print its reply."),
+  Flag.withDefault(false),
 );
 
 const sendCommand = Command.make("send", {

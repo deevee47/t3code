@@ -88,7 +88,7 @@ export function formatThreadList(
   return threads
     .map((thread) =>
       [
-        thread.id,
+        thread.id.padEnd(36),
         threadCliStatus(thread).padEnd(14),
         thread.modelSelection.instanceId.padEnd(12),
         oneLine(projectTitles.get(thread.projectId) ?? "?", 24).padEnd(24),

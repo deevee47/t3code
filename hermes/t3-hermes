@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+# t3-hermes — keep the Hermes build of T3 Code on top of the latest T3 Code release.
+#
+#   t3-hermes update [--nightly] [--force]   rebase the Hermes patch onto the newest upstream
+#                                            release, build it, and install it
+#   t3-hermes install                        install the last build (quits the app first)
+#   t3-hermes status                         show the installed base and the newest release
+#   t3-hermes schedule on|off                check for updates every day at 10:00
+#
+# If a new release conflicts with the Hermes patch or fails to build, nothing is
+# installed: the current app keeps working and the branch is restored.
+set -euo pipefail
+
+# The repo is rewritten during an update, so run from a private copy of this script.
+if [[ "${T3_HERMES_REEXEC:-}" != "1" ]]; then
+  copy="$(mktemp -t t3-hermes)"
+  cp "$0" "$copy"
+  T3_HERMES_REEXEC=1 T3_HERMES_SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")" exec bash "$copy" "$@"
+fi
+
+SELF="${T3_HERMES_SELF}"
+REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
+BRANCH="hermes"
+APP_NAME="T3 Code (Alpha)"
+APP_PATH="/Applications/${APP_NAME}.app"
+WORK="${HOME}/.t3-hermes-build"
+LOG="${WORK}/update.log"
+STAGED="${WORK}/staged.app"
+LABEL="com.t3code.hermes-update"
+PLIST="${HOME}/Library/LaunchAgents/${LABEL}.plist"
+mkdir -p "$WORK"
+
+say() { printf '%s\n' "$*"; }
+notify() {
+  osascript -e "display notification \"${1//\"/\'}\" with title \"T3 Code · Hermes\"" >/dev/null 2>&1 || true
+}
+fail() {
+  say "error: $*" >&2
+  notify "$*"
+  exit 1
+}
+
+load_toolchain() {
+  # shellcheck disable=SC1091
+  [[ -f "${HOME}/.config/vite-plus/env" ]] && . "${HOME}/.config/vite-plus/env"
+  export PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:/opt/homebrew/bin:${PATH}"
+  command -v vp >/dev/null || fail "vp (Vite+) is not installed: curl -fsSL https://vite.plus | bash"
+}
+
+current_base() {
+  git -C "$REPO" describe --tags --abbrev=0 --exclude '*-*' "$BRANCH" 2>/dev/null || true
+}
+
+latest_release() {
+  git -C "$REPO" tag --list 'v[0-9]*.[0-9]*.[0-9]*' | grep -Ev -- '-' | sort -V | tail -1
+}
+
+app_running() {
+  pgrep -xq "$APP_NAME" 2>/dev/null || pgrep -fq "/Applications/${APP_NAME}.app/Contents/MacOS/" 2>/dev/null
+}
+
+install_staged() {
+  [[ -d "$STAGED" ]] || fail "No build is waiting to be installed. Run: t3-hermes update"
+  if app_running; then
+    say "Quitting ${APP_NAME}…"
+    osascript -e "tell application \"${APP_NAME}\" to quit" >/dev/null 2>&1 || true
+    for _ in $(seq 1 30); do app_running || break; sleep 1; done
+    app_running && fail "${APP_NAME} is still running. Quit it and run: t3-hermes install"
+  fi
+  if [[ -d "$APP_PATH" ]]; then
+    rm -rf "${WORK}/previous.app"
+    mv "$APP_PATH" "${WORK}/previous.app"
+  fi
+  ditto "$STAGED" "$APP_PATH"
+  rm -rf "$STAGED"
+  xattr -dr com.apple.quarantine "$APP_PATH" 2>/dev/null || true
+  say "Installed $(cat "${WORK}/staged-version" 2>/dev/null || echo 'the new build') to ${APP_PATH}."
+  say "The previous app is kept at ${WORK}/previous.app."
+  open -a "$APP_PATH" || true
+}
+
+stage_build() {
+  local version="$1" dmg mount
+  dmg="$(ls -t "${WORK}/release/"*.dmg 2>/dev/null | head -1)"
+  [[ -n "$dmg" ]] || fail "The build finished but produced no DMG."
+  mount="$(mktemp -d)"
+  hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg" >/dev/null
+  rm -rf "$STAGED"
+  ditto "${mount}/${APP_NAME}.app" "$STAGED"
+  hdiutil detach "$mount" >/dev/null || true
+  # Without an update feed the app's own updater stays off, so it can never
+  # replace this build with the official one.
+  rm -f "${STAGED}/Contents/Resources/app-update.yml"
+  codesign --force --deep --sign - "$STAGED" >/dev/null 2>&1 || true
+  echo "$version" >"${WORK}/staged-version"
+}
+
+link_cli() {
+  mkdir -p "${HOME}/.local/bin"
+  cat >"${HOME}/.local/bin/t3" <<EOF
+#!/usr/bin/env bash
+# T3 Code CLI from the Hermes build (${REPO}).
+exec node "${REPO}/apps/server/dist/bin.mjs" "\$@"
+EOF
+  chmod +x "${HOME}/.local/bin/t3"
+  ln -sf "$SELF" "${HOME}/.local/bin/t3-hermes"
+  # Teach Hermes to drive T3 through the CLI.
+  local skills="${HERMES_HOME:-${HOME}/.hermes}/skills/software-development"
+  mkdir -p "$skills"
+  rm -rf "${skills}/t3-code"
+  cp -R "${REPO}/hermes/skills/t3-code" "${skills}/t3-code"
+}
+
+cmd_update() {
+  local nightly=0 force=0
+  for arg in "$@"; do
+    case "$arg" in
+      --nightly) nightly=1 ;;
+      --force) force=1 ;;
+      *) fail "Unknown option: $arg" ;;
+    esac
+  done
+  load_toolchain
+  cd "$REPO"
+  [[ -z "$(git status --porcelain --untracked-files=no)" ]] ||
+    fail "The fork at ${REPO} has uncommitted changes. Commit or stash them first."
+  git checkout -q "$BRANCH"
+
+  say "Fetching T3 Code releases…"
+  git fetch -q upstream --tags --force
+  git fetch -q upstream main
+
+  local base target
+  base="$(current_base)"
+  if [[ $nightly == 1 ]]; then target="upstream/main"; else target="$(latest_release)"; fi
+  [[ -n "$base" && -n "$target" ]] || fail "Could not find the current base or the newest release."
+
+  if [[ $nightly == 0 && "$base" == "$target" && $force == 0 ]]; then
+    say "Already on the newest release (${target})."
+    [[ -d "$STAGED" ]] && ! app_running && install_staged
+    return 0
+  fi
+
+  local backup
+  backup="hermes-backup-$(date +%Y%m%d-%H%M%S)"
+  git branch -q "$backup" "$BRANCH"
+  say "Moving the Hermes patch from ${base} onto ${target} (backup branch: ${backup})…"
+  if ! git rebase -q --onto "$target" "$base" "$BRANCH"; then
+    git rebase --abort || true
+    git reset -q --hard "$backup"
+    fail "T3 Code ${target} conflicts with the Hermes patch. Your app is unchanged. Ask Claude to rebase branch '${BRANCH}' onto ${target}."
+  fi
+
+  say "Building (this takes a few minutes)…"
+  rm -rf "${WORK}/release"
+  local version
+  if [[ $nightly == 1 ]]; then
+    version="$(latest_release)"
+    version="${version#v}-nightly.$(date +%Y%m%d)"
+  else
+    version="${target#v}"
+  fi
+  if ! { vp i && node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch arm64 \
+    --build-version "$version" --output-dir "${WORK}/release"; } >"${WORK}/build.log" 2>&1; then
+    git reset -q --hard "$backup"
+    vp i >/dev/null 2>&1 || true
+    fail "The build of ${target} failed (see ${WORK}/build.log). Your app is unchanged."
+  fi
+
+  stage_build "$target"
+  link_cli
+  git push -q --force-with-lease origin "$BRANCH" 2>/dev/null || say "(Could not push to your fork; continuing.)"
+
+  if app_running && [[ "${T3_HERMES_UNATTENDED:-}" == "1" ]]; then
+    notify "T3 Code ${target} with Hermes is ready. Run: t3-hermes install"
+    say "Staged ${target}. It installs the next time the app is closed, or run: t3-hermes install"
+    return 0
+  fi
+  install_staged
+  notify "Updated to T3 Code ${target} with Hermes."
+}
+
+cmd_status() {
+  cd "$REPO"
+  git fetch -q upstream --tags --force 2>/dev/null || true
+  say "Hermes patch base: $(current_base)"
+  say "Newest T3 release: $(latest_release)"
+  [[ -d "$STAGED" ]] && say "Waiting to install: $(cat "${WORK}/staged-version")"
+  [[ -f "$PLIST" ]] && say "Daily update check: on" || say "Daily update check: off"
+}
+
+cmd_schedule() {
+  case "${1:-}" in
+    on)
+      mkdir -p "$(dirname "$PLIST")"
+      cat >"$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>${LABEL}</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>${SELF}</string><string>update</string></array>
+  <key>EnvironmentVariables</key>
+  <dict><key>T3_HERMES_UNATTENDED</key><string>1</string></dict>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>${LOG}</string>
+  <key>StandardErrorPath</key><string>${LOG}</string>
+</dict>
+</plist>
+EOF
+      launchctl bootout "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || true
+      launchctl bootstrap "gui/$(id -u)" "$PLIST"
+      say "Daily update check at 10:00 is on. Log: ${LOG}"
+      ;;
+    off)
+      launchctl bootout "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || true
+      rm -f "$PLIST"
+      say "Daily update check is off."
+      ;;
+    *) fail "Usage: t3-hermes schedule on|off" ;;
+  esac
+}
+
+case "${1:-}" in
+  update) shift; cmd_update "$@" ;;
+  install) install_staged ;;
+  status) cmd_status ;;
+  schedule) shift; cmd_schedule "$@" ;;
+  link) link_cli; say "Linked t3 and t3-hermes into ~/.local/bin." ;;
+  stage) load_toolchain; stage_build "$(current_base)" ;;
+  *) sed -n '2,11p' "$SELF" | sed 's/^# \{0,1\}//' ;;
+esac
