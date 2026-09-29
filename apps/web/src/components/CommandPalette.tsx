@@ -150,7 +150,14 @@ import { orderItemsByPreferredIds, sortLogicalProjectsForSidebar } from "./Sideb
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import { CommandPaletteContent } from "./CommandPaletteContent";
 import { CommandPaletteResults } from "./CommandPaletteResults";
-import { AzureDevOpsIcon, BitbucketIcon, GitHubIcon, GitLabIcon, ForgejoIcon } from "./Icons";
+import {
+  AzureDevOpsIcon,
+  BitbucketIcon,
+  ForgejoIcon,
+  GitHubIcon,
+  GitLabIcon,
+  HermesIcon,
+} from "./Icons";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectFavicon } from "./ProjectFavicon";
 import { ProjectFilePicker } from "./files/ProjectFilePicker";
@@ -165,6 +172,7 @@ import {
 } from "./ThreadCommandSubtitle";
 import { ThreadRowLeadingStatus, ThreadRowTrailingStatus } from "./ThreadStatusIndicators";
 import { primaryServerKeybindingsAtom, primaryServerProvidersAtom } from "../state/server";
+import { useSidebarWorkspaceStore, useSwitchSidebarWorkspace } from "../sidebarWorkspaceStore";
 import { deriveProviderInstanceEntries, type ProviderInstanceEntry } from "../providerInstances";
 import { resolveShortcutCommand, threadJumpIndexFromCommand } from "../keybindings";
 import { CommandDialog, CommandDialogPopup, CommandFooterAction } from "./ui/command";
@@ -704,6 +712,8 @@ function OpenCommandPaletteDialog(props: {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { theme, themeHalves, resolvedTheme } = useTheme();
   const providers = useAtomValue(primaryServerProvidersAtom);
+  const sidebarWorkspace = useSidebarWorkspaceStore((state) => state.workspace);
+  const switchSidebarWorkspace = useSwitchSidebarWorkspace();
   const providerEntryByEnvironmentAndInstanceId = useMemo(() => {
     const map = new Map<string, ProviderInstanceEntry>();
     for (const environment of environments) {
@@ -1755,6 +1765,17 @@ function OpenCommandPaletteDialog(props: {
     shortcutCommand: "projectSearch.toggle",
     run: async () => {
       openOverlayMode("content");
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:switch-sidebar-workspace",
+    searchTerms: ["hermes", "workspace", "switch", "t3", "agent", "sidebar"],
+    title: sidebarWorkspace === "hermes" ? "Switch to T3 workspace" : "Switch to Hermes workspace",
+    icon: <HermesIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      switchSidebarWorkspace(sidebarWorkspace === "hermes" ? "t3" : "hermes");
     },
   });
 

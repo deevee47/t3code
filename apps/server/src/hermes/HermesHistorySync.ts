@@ -7,7 +7,7 @@
  *
  * @module HermesHistorySync
  */
-import * as OS from "node:os";
+import * as NodeOS from "node:os";
 
 import {
   CommandId,
@@ -58,7 +58,7 @@ const make = Effect.gen(function* () {
   const snapshots = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
 
-  const hermesHome = process.env.HERMES_HOME?.trim() || path.join(OS.homedir(), ".hermes");
+  const hermesHome = process.env.HERMES_HOME?.trim() || path.join(NodeOS.homedir(), ".hermes");
   const databasePath = path.join(hermesHome, "state.db");
   const markerPath = path.join(serverConfig.stateDir, "hermes-history-imported.json");
   const newId = crypto.randomUUIDv4;
@@ -100,7 +100,7 @@ const make = Effect.gen(function* () {
           return { projectId: existing.value.id, workspaceRoot: session.cwd };
         }
       }
-      const workspaceRoot = OS.homedir();
+      const workspaceRoot = NodeOS.homedir();
       return { projectId: yield* ensureProject(workspaceRoot, HOME_PROJECT_TITLE), workspaceRoot };
     });
 

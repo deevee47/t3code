@@ -273,6 +273,21 @@ export const GrokIcon: Icon = ({ className, ...props }) => (
   </svg>
 );
 
+/** Winged staff for Hermes Agent. */
+export const HermesIcon: Icon = ({ className, ...props }) => (
+  <svg
+    {...props}
+    viewBox="0 0 24 24"
+    className={cn("fill-[#1F1F1F] dark:fill-[#F2F2F2]", className)}
+  >
+    <circle cx="12" cy="3.4" r="1.9" />
+    <rect x="11" y="5" width="2" height="17" rx="1" />
+    <path d="M11 7.2C8.2 5.6 4.6 5.4 1.6 6.4c2.1 1.3 4.6 2.6 9.4 3.9Z" />
+    <path d="M13 7.2c2.8-1.6 6.4-1.8 9.4-.8-2.1 1.3-4.6 2.6-9.4 3.9Z" />
+    <path d="M8.2 12.4c1.8-1.3 5.8-1.3 7.6 0l-1 1.1c-1.4-.8-4.2-.8-5.6 0Zm0 4.2c1.8 1.3 5.8 1.3 7.6 0l-1-1.1c-1.4.8-4.2.8-5.6 0Z" />
+  </svg>
+);
+
 export const TraeIcon: Icon = (props) => (
   <svg {...props} viewBox="0 0 24 24" fill="currentColor">
     {/* Back rectangle: left strip + bottom strip drawn separately — empty bottom-left corner is the gap between them */}

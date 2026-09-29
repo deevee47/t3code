@@ -36,8 +36,11 @@ import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUp
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
+  trailing,
 }: {
   isElectron: boolean;
+  /** Rendered at the right edge of the header. */
+  trailing?: ReactNode;
 }) {
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
@@ -77,6 +80,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           {pillLabel}
         </Badge>
       ) : null}
+      {trailing}
     </SidebarHeader>
   );
 });

@@ -1,6 +1,6 @@
-import * as FS from "node:fs";
+import * as NodeFS from "node:fs";
 import * as NodeSqlite from "node:sqlite";
-import * as OS from "node:os";
+import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -10,7 +10,7 @@ import { readHermesHistorySessions, titleForHermesSession } from "./HermesHistor
 const tempDirs: string[] = [];
 
 function makeHermesDatabase(): string {
-  const dir = FS.mkdtempSync(NodePath.join(OS.tmpdir(), "hermes-history-"));
+  const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "hermes-history-"));
   tempDirs.push(dir);
   const path = NodePath.join(dir, "state.db");
   const db = new NodeSqlite.DatabaseSync(path);
@@ -39,7 +39,7 @@ function makeHermesDatabase(): string {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) FS.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) NodeFS.rmSync(dir, { recursive: true, force: true });
 });
 
 describe("readHermesHistorySessions", () => {

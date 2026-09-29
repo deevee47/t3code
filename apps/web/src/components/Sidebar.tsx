@@ -128,7 +128,6 @@ import {
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
   useProjects,
-  useThreadShells,
 } from "../state/entities";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
@@ -233,6 +232,8 @@ import {
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarWorkspaceSwitch, useSidebarWorkspaceSwipe } from "./sidebar/SidebarWorkspaceSwitch";
+import { useWorkspaceThreadShells } from "../sidebarWorkspaceStore";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
@@ -2129,7 +2130,8 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
 export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
-  const threads = useThreadShells();
+  const threads = useWorkspaceThreadShells();
+  const workspaceSwipe = useSidebarWorkspaceSwipe<HTMLDivElement>();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -4366,8 +4368,9 @@ export default function Sidebar() {
   const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
   return (
     <>
-      <SidebarChromeHeader isElectron={isElectron} />
+      <SidebarChromeHeader isElectron={isElectron} trailing={<SidebarWorkspaceSwitch />} />
       <SidebarContent
+        {...workspaceSwipe}
         className="gap-0 min-h-full"
         fixedHeader={
           // Lifted above the stage backdrop, whose fade bleeds below the
