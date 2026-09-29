@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import type * as React from "react";
 
 import { cn } from "../../lib/utils";
-import { nextSidebarWorkspace, type SidebarWorkspace } from "../../sidebarWorkspace.logic";
+import { nextSidebarWorkspace } from "../../sidebarWorkspace.logic";
 import {
   useSidebarWorkspaceStore,
   useSwitchSidebarWorkspace,
@@ -16,8 +16,6 @@ const SWIPE_THRESHOLD_PX = 60;
 const GESTURE_GAP_MS = 220;
 const SLIDE_DURATION_MS = 180;
 
-const WORKSPACE_LABELS: Record<SidebarWorkspace, string> = { t3: "T3", hermes: "Hermes" };
-
 const WORKSPACE_LOGO_MASK = {
   maskImage: `url(${workspaceLogoUrl})`,
   maskSize: "contain",
@@ -25,41 +23,32 @@ const WORKSPACE_LOGO_MASK = {
   maskPosition: "center",
 } as const;
 
-/** The logo is a mask, so it takes the button's text color in light and dark themes. */
-function WorkspaceLogo() {
-  return <span aria-hidden className="size-4 shrink-0 bg-current" style={WORKSPACE_LOGO_MASK} />;
-}
-
-/** T3 / Hermes toggle for the right side of the sidebar header. */
+/**
+ * `T3 Code | logo` next to the sidebar brand. The logo toggles between the T3 and
+ * Hermes workspaces and is lit while Hermes is active. The button is exactly the
+ * logo's size, so the gaps on either side of the bar match.
+ */
 export const SidebarWorkspaceSwitch = memo(function SidebarWorkspaceSwitch() {
   const workspace = useSidebarWorkspaceStore((state) => state.workspace);
   const switchWorkspace = useSwitchSidebarWorkspace();
   useWorkspaceFollowsRoute();
+  const hermesActive = workspace === "hermes";
   return (
-    <div
-      role="radiogroup"
-      aria-label="Workspace"
-      className="relative z-10 ml-auto mr-2 flex h-6 shrink-0 items-center rounded-full bg-sidebar-accent/60 p-0.5 text-xs md:mr-3"
-    >
-      {(["t3", "hermes"] as const).map((value) => (
-        <button
-          key={value}
-          type="button"
-          role="radio"
-          aria-checked={workspace === value}
-          aria-label={`${WORKSPACE_LABELS[value]} workspace`}
-          onClick={() => switchWorkspace(value)}
-          className={cn(
-            "flex h-5 items-center gap-1 rounded-full px-2 font-medium outline-hidden ring-ring transition-colors focus-visible:ring-2",
-            workspace === value
-              ? "bg-background text-foreground shadow-xs"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {value === "hermes" ? <WorkspaceLogo /> : null}
-          <span>{WORKSPACE_LABELS[value]}</span>
-        </button>
-      ))}
+    <div className="relative z-10 ml-2.5 flex shrink-0 items-center gap-2.5">
+      <span aria-hidden className="h-4 w-px bg-border" />
+      <button
+        type="button"
+        aria-pressed={hermesActive}
+        aria-label={hermesActive ? "Switch to T3 workspace" : "Switch to Hermes workspace"}
+        onClick={() => switchWorkspace(hermesActive ? "t3" : "hermes")}
+        className={cn(
+          "size-[1.125rem] shrink-0 rounded-sm outline-hidden ring-ring ring-offset-2 ring-offset-sidebar transition-colors focus-visible:ring-2",
+          hermesActive ? "text-foreground" : "text-muted-foreground/60 hover:text-foreground",
+        )}
+      >
+        {/* A mask, so the logo takes the text color in light and dark themes. */}
+        <span aria-hidden className="block size-full bg-current" style={WORKSPACE_LOGO_MASK} />
+      </button>
     </div>
   );
 });
