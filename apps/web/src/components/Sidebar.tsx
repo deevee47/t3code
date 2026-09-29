@@ -232,6 +232,7 @@ import {
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarTrashIcon, SidebarTrashTray } from "./sidebar/SidebarTrash";
 import { SidebarWorkspaceSwitch, useSidebarWorkspaceSwipe } from "./sidebar/SidebarWorkspaceSwitch";
 import { useWorkspaceThreadShells } from "../sidebarWorkspaceStore";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
@@ -3513,9 +3514,70 @@ export default function Sidebar() {
     sidebarListItems,
     threadByKey,
   ]);
+  // Dropping a dragged thread on the trash tray deletes it. Rows are clamped to the
+  // list while dragging, so the pointer, not the row, decides whether it is over the tray.
+  const trashTrayRef = useRef<HTMLDivElement | null>(null);
+  const trashHoveredRef = useRef(false);
+  const [trashHovered, setTrashHovered] = useState(false);
+  const isDraggingThread = dragState !== null;
+  useEffect(() => {
+    if (!isDraggingThread) {
+      trashHoveredRef.current = false;
+      setTrashHovered(false);
+      return;
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      const rect = trashTrayRef.current?.getBoundingClientRect();
+      const over =
+        rect !== undefined &&
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+      if (over === trashHoveredRef.current) return;
+      trashHoveredRef.current = over;
+      setTrashHovered(over);
+    };
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onPointerMove);
+  }, [isDraggingThread]);
+  const deleteThreadFromTrash = useCallback(
+    async (thread: EnvironmentThreadShell) => {
+      const api = readLocalApi();
+      if (confirmThreadDelete && api) {
+        const confirmed = await settlePromise(() =>
+          api.dialogs.confirm(
+            [
+              `Delete thread "${thread.title}"?`,
+              "This permanently clears conversation history for this thread.",
+            ].join("\n"),
+            { variant: "destructive" },
+          ),
+        );
+        if (confirmed._tag === "Failure" || !confirmed.value) return;
+      }
+      const result = await deleteThread(scopeThreadRef(thread.environmentId, thread.id));
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Failed to delete thread",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          }),
+        );
+      }
+    },
+    [confirmThreadDelete, deleteThread],
+  );
   const handleThreadDragEnd = useCallback(
     (event: DragEndEvent) => {
       const activeKey = String(event.active.id);
+      if (trashHoveredRef.current) {
+        const trashed = threadByKey.get(activeKey);
+        if (trashed) void deleteThreadFromTrash(trashed);
+        return;
+      }
       const activeSection = sectionByThreadKey.get(activeKey);
       const target =
         event.over === null
@@ -3655,6 +3717,7 @@ export default function Sidebar() {
     },
     [
       activeKeysById,
+      deleteThreadFromTrash,
       pinnedKeysById,
       serverConfigs,
       activeKeys,
@@ -4946,7 +5009,10 @@ export default function Sidebar() {
           ) : null}
         </SidebarGroup>
       </SidebarContent>
-      <SidebarChromeFooter />
+      <div className="relative">
+        <SidebarChromeFooter trash={<SidebarTrashIcon dragging={dragState !== null} />} />
+        <SidebarTrashTray dragging={dragState !== null} hovered={trashHovered} ref={trashTrayRef} />
+      </div>
     </>
   );
 }

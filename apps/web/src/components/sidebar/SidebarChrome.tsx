@@ -136,7 +136,12 @@ function SidebarUtilityItem({
   );
 }
 
-export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
+export const SidebarUtilityMenu = memo(function SidebarUtilityMenu({
+  trash,
+}: {
+  /** Rendered after the utility icons, e.g. the thread trash. */
+  trash?: ReactNode;
+}) {
   const navigate = useNavigate();
   const canGoBack = useCanGoBack();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -219,6 +224,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Usage"
             onClick={handleUsageClick}
           />
+          {trash}
         </>
       )}
       <SidebarUpdatePill />
@@ -226,12 +232,16 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   );
 });
 
-export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+export const SidebarChromeFooter = memo(function SidebarChromeFooter({
+  trash,
+}: {
+  trash?: ReactNode;
+}) {
   return (
     <SidebarFooter className="px-[var(--sidebar-content-inset)] py-1">
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      <SidebarUtilityMenu />
+      <SidebarUtilityMenu trash={trash} />
     </SidebarFooter>
   );
 });
