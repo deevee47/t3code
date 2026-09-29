@@ -27,7 +27,9 @@ export const SidebarWorkspaceSwitch = memo(function SidebarWorkspaceSwitch() {
   useWorkspaceFollowsRoute();
   const hermesActive = workspace === "hermes";
   return (
-    <div className="relative z-10 ml-2.5 flex shrink-0 items-center gap-2.5">
+    // 12px of visible space on each side of the bar: the header's own 8px gap plus 4px
+    // on the left; on the right, 9px plus the ~3px of transparent edge inside the logo.
+    <div className="relative z-10 ml-1 flex shrink-0 items-center gap-[9px]">
       <span aria-hidden className="h-4 w-px bg-border" />
       <button
         type="button"

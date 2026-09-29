@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # t3-hermes — keep the Hermes build of T3 Code on top of the latest T3 Code release.
 #
-#   t3-hermes update [--nightly] [--force]   rebase the Hermes patch onto the newest upstream
+#   t3-hermes update [--nightly] [--force] [--stage-only]   rebase the Hermes patch onto the newest upstream
 #                                            release, build it, and install it (if the app is
 #                                            open, the build waits for `t3-hermes install`)
 #   t3-hermes install                        install the last build (quits the app first)
@@ -168,11 +168,12 @@ EOF
 }
 
 cmd_update() {
-  local nightly=0 force=0
+  local nightly=0 force=0 stage_only=0
   for arg in "$@"; do
     case "$arg" in
       --nightly) nightly=1 ;;
       --force) force=1 ;;
+      --stage-only) stage_only=1 ;;
       *) fail "Unknown option: $arg" ;;
     esac
   done
@@ -228,7 +229,7 @@ cmd_update() {
   git push -q --force-with-lease origin "$BRANCH" 2>/dev/null || say "(Could not push to your fork; continuing.)"
 
   # Never quit a running app mid-work; `t3-hermes install` does that when asked.
-  if app_running; then
+  if app_running || [[ $stage_only == 1 ]]; then
     notify "T3 Code ${target} with Hermes is ready. Run: t3-hermes install"
     say "Staged ${target}. It installs the next time the app is closed, or run: t3-hermes install"
     return 0
