@@ -6,7 +6,8 @@
 import { HERMES_DEFAULT_MODEL, type ProviderInstanceId } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { useAtomValue } from "@effect/atom-react";
-import { useMemo } from "react";
+import { useLocation, useParams, useRouter } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -16,8 +17,11 @@ import {
   DEFAULT_HERMES_INSTANCE,
   HERMES_DRIVER_KIND,
   hermesInstanceIds,
+  type RememberedThread,
+  resolveWorkspaceLandingThread,
   type SidebarWorkspace,
   threadBelongsToWorkspace,
+  workspaceOfThread,
 } from "./sidebarWorkspace.logic";
 import { useThreadShells } from "./state/entities";
 import { primaryServerProvidersAtom } from "./state/server";
@@ -26,10 +30,13 @@ interface SidebarWorkspaceState {
   readonly workspace: SidebarWorkspace;
   /** The T3 workspace's new-thread provider, restored when leaving Hermes. */
   readonly t3StickyProvider: ProviderInstanceId | null;
+  /** The thread last open in each workspace, reopened when switching back. */
+  readonly lastThreadByWorkspace: Partial<Record<SidebarWorkspace, RememberedThread>>;
   readonly setWorkspace: (
     workspace: SidebarWorkspace,
     hermesInstanceId: ProviderInstanceId,
   ) => void;
+  readonly rememberThread: (workspace: SidebarWorkspace, thread: RememberedThread) => void;
 }
 
 function moveNewThreadDefault(
@@ -58,6 +65,7 @@ export const useSidebarWorkspaceStore = create<SidebarWorkspaceState>()(
     (set, get) => ({
       workspace: "t3",
       t3StickyProvider: null,
+      lastThreadByWorkspace: {},
       setWorkspace: (workspace, hermesInstanceId) => {
         const current = get();
         if (current.workspace === workspace) return;
@@ -68,6 +76,18 @@ export const useSidebarWorkspaceStore = create<SidebarWorkspaceState>()(
         moveNewThreadDefault(workspace, hermesInstanceId, t3StickyProvider);
         set({ workspace, t3StickyProvider });
       },
+      rememberThread: (workspace, thread) => {
+        const current = get().lastThreadByWorkspace[workspace];
+        if (
+          current?.threadId === thread.threadId &&
+          current.environmentId === thread.environmentId
+        ) {
+          return;
+        }
+        set((state) => ({
+          lastThreadByWorkspace: { ...state.lastThreadByWorkspace, [workspace]: thread },
+        }));
+      },
     }),
     {
       name: "t3code:sidebar-workspace:v1",
@@ -77,6 +97,7 @@ export const useSidebarWorkspaceStore = create<SidebarWorkspaceState>()(
       partialize: (state) => ({
         workspace: state.workspace,
         t3StickyProvider: state.t3StickyProvider,
+        lastThreadByWorkspace: state.lastThreadByWorkspace,
       }),
     },
   ),
@@ -88,16 +109,94 @@ export function useHermesInstanceIds(): ReadonlySet<string> {
   return useMemo(() => hermesInstanceIds(providers), [providers]);
 }
 
-/** Switches workspace, routing Hermes defaults to the first Hermes instance. */
-export function useSwitchSidebarWorkspace(): (workspace: SidebarWorkspace) => void {
+function useHermesDefaultInstanceId(): ProviderInstanceId {
   const providers = useAtomValue(primaryServerProvidersAtom);
-  const setWorkspace = useSidebarWorkspaceStore((state) => state.setWorkspace);
-  return useMemo(() => {
-    const hermesInstanceId =
+  return useMemo(
+    () =>
       providers.find((provider) => provider.driver === HERMES_DRIVER_KIND && provider.enabled)
-        ?.instanceId ?? DEFAULT_HERMES_INSTANCE;
-    return (workspace: SidebarWorkspace) => setWorkspace(workspace, hermesInstanceId);
-  }, [providers, setWorkspace]);
+        ?.instanceId ?? DEFAULT_HERMES_INSTANCE,
+    [providers],
+  );
+}
+
+function useRouteThread(): RememberedThread | null {
+  const params = useParams({ strict: false }) as Partial<
+    Record<"environmentId" | "threadId", string>
+  >;
+  return useMemo(
+    () =>
+      params.environmentId && params.threadId
+        ? { environmentId: params.environmentId, threadId: params.threadId }
+        : null,
+    [params.environmentId, params.threadId],
+  );
+}
+
+/**
+ * Switches workspace and, on chat pages, opens that workspace's thread so the main
+ * content matches the sidebar. Other pages, such as settings, stay where they are.
+ */
+export function useSwitchSidebarWorkspace(): (workspace: SidebarWorkspace) => void {
+  const router = useRouter();
+  const threads = useThreadShells();
+  const hermesIds = useHermesInstanceIds();
+  const hermesInstanceId = useHermesDefaultInstanceId();
+  const setWorkspace = useSidebarWorkspaceStore((state) => state.setWorkspace);
+  const routeThread = useRouteThread();
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const onChatPage = routeThread !== null || pathname === "/" || pathname.startsWith("/draft/");
+  return useCallback(
+    (workspace: SidebarWorkspace) => {
+      setWorkspace(workspace, hermesInstanceId);
+      if (!onChatPage) return;
+      const open = routeThread
+        ? threads.find(
+            (thread) =>
+              thread.id === routeThread.threadId &&
+              thread.environmentId === routeThread.environmentId,
+          )
+        : undefined;
+      if (open && workspaceOfThread(open, hermesIds) === workspace) return;
+      const landing = resolveWorkspaceLandingThread({
+        threads,
+        workspace,
+        hermesIds,
+        remembered: useSidebarWorkspaceStore.getState().lastThreadByWorkspace[workspace],
+      });
+      void (landing
+        ? router.navigate({
+            to: "/$environmentId/$threadId",
+            params: { environmentId: landing.environmentId, threadId: landing.id },
+          })
+        : router.navigate({ to: "/" }));
+    },
+    [hermesIds, hermesInstanceId, onChatPage, routeThread, router, setWorkspace, threads],
+  );
+}
+
+/**
+ * Keeps the sidebar on the workspace of the open thread, and remembers it as that
+ * workspace's last thread. Runs when the route or the thread's provider changes, so a
+ * switch that is still navigating is not undone.
+ */
+export function useWorkspaceFollowsRoute(): void {
+  const threads = useThreadShells();
+  const hermesIds = useHermesInstanceIds();
+  const hermesInstanceId = useHermesDefaultInstanceId();
+  const routeThread = useRouteThread();
+  const open = routeThread
+    ? threads.find(
+        (thread) =>
+          thread.id === routeThread.threadId && thread.environmentId === routeThread.environmentId,
+      )
+    : undefined;
+  const owner = open ? workspaceOfThread(open, hermesIds) : null;
+  useEffect(() => {
+    if (!routeThread || !owner) return;
+    const store = useSidebarWorkspaceStore.getState();
+    store.rememberThread(owner, routeThread);
+    if (store.workspace !== owner) store.setWorkspace(owner, hermesInstanceId);
+  }, [hermesInstanceId, owner, routeThread]);
 }
 
 /** Thread shells for the active sidebar workspace. */

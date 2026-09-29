@@ -34,3 +34,52 @@ export function nextSidebarWorkspace(
   const count = SIDEBAR_WORKSPACES.length;
   return SIDEBAR_WORKSPACES[(index + direction + count) % count]!;
 }
+
+export function workspaceOfThread(
+  thread: { readonly modelSelection: { readonly instanceId: string } },
+  hermesIds: ReadonlySet<string>,
+): SidebarWorkspace {
+  return hermesIds.has(thread.modelSelection.instanceId) ? "hermes" : "t3";
+}
+
+export interface RememberedThread {
+  readonly environmentId: string;
+  readonly threadId: string;
+}
+
+interface LandingCandidate {
+  readonly id: string;
+  readonly environmentId: string;
+  readonly modelSelection: { readonly instanceId: string };
+  readonly updatedAt: string;
+  readonly archivedAt: string | null;
+}
+
+/**
+ * The thread to show after switching to `workspace`: the one last open there if it
+ * still exists, else its most recently updated thread, else none (the new-thread view).
+ */
+export function resolveWorkspaceLandingThread<T extends LandingCandidate>(input: {
+  readonly threads: ReadonlyArray<T>;
+  readonly workspace: SidebarWorkspace;
+  readonly hermesIds: ReadonlySet<string>;
+  readonly remembered: RememberedThread | undefined;
+}): T | null {
+  const candidates = input.threads.filter(
+    (thread) =>
+      thread.archivedAt === null && workspaceOfThread(thread, input.hermesIds) === input.workspace,
+  );
+  const remembered = input.remembered;
+  const previous = remembered
+    ? candidates.find(
+        (thread) =>
+          thread.id === remembered.threadId && thread.environmentId === remembered.environmentId,
+      )
+    : undefined;
+  if (previous) return previous;
+  let newest: T | null = null;
+  for (const thread of candidates) {
+    if (newest === null || thread.updatedAt > newest.updatedAt) newest = thread;
+  }
+  return newest;
+}

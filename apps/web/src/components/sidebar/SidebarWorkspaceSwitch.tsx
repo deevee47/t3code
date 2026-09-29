@@ -3,7 +3,11 @@ import type * as React from "react";
 
 import { cn } from "../../lib/utils";
 import { nextSidebarWorkspace, type SidebarWorkspace } from "../../sidebarWorkspace.logic";
-import { useSidebarWorkspaceStore, useSwitchSidebarWorkspace } from "../../sidebarWorkspaceStore";
+import {
+  useSidebarWorkspaceStore,
+  useSwitchSidebarWorkspace,
+  useWorkspaceFollowsRoute,
+} from "../../sidebarWorkspaceStore";
 import workspaceLogoUrl from "./workspace-logo.png";
 
 /** Horizontal travel, in pixels, that commits one switch. */
@@ -30,6 +34,7 @@ function WorkspaceLogo() {
 export const SidebarWorkspaceSwitch = memo(function SidebarWorkspaceSwitch() {
   const workspace = useSidebarWorkspaceStore((state) => state.workspace);
   const switchWorkspace = useSwitchSidebarWorkspace();
+  useWorkspaceFollowsRoute();
   return (
     <div
       role="radiogroup"

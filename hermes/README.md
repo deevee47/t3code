@@ -6,8 +6,9 @@ This fork adds [Hermes Agent](https://hermes-agent.nousresearch.com) to T3 Code:
   (every model Hermes offers), approvals, stop, follow-ups, `/compact`, diffs and checkpoints.
 - **Hermes workspace.** The switch in the sidebar header, or a two-finger swipe across the
   sidebar, flips between the T3 workspace (every other thread) and the Hermes workspace. The
-  command palette has "Switch to Hermes workspace" too. New threads in the Hermes workspace
-  start on Hermes.
+  command palette has "Switch to Hermes workspace" too. The main view follows: switching opens
+  the thread you last had open in that workspace, and opening a Hermes thread from search or a
+  notification flips the sidebar to Hermes. New threads in the Hermes workspace start on Hermes.
 - **Hermes history.** Sessions from the Hermes desktop app, CLI and cron jobs appear as
   threads you can continue. Sessions from a folder T3 knows land in that project; the rest land
   in a "Hermes" project at your home folder. Turn it off in Settings → Providers → Hermes.
