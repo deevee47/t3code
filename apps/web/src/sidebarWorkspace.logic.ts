@@ -83,3 +83,18 @@ export function resolveWorkspaceLandingThread<T extends LandingCandidate>(input:
   }
   return newest;
 }
+
+/** Travel, in pixels, before a gesture locks to an axis. */
+const AXIS_LOCK_DISTANCE_PX = 10;
+
+/**
+ * Locks a swipe to one axis from its accumulated travel. Sideways wins only when clearly
+ * dominant, so a vertical scroll that drifts never switches workspace.
+ */
+export function resolveGestureAxis(
+  sumX: number,
+  sumY: number,
+): "pending" | "horizontal" | "vertical" {
+  if (Math.abs(sumX) + Math.abs(sumY) < AXIS_LOCK_DISTANCE_PX) return "pending";
+  return Math.abs(sumX) > Math.abs(sumY) * 1.6 ? "horizontal" : "vertical";
+}

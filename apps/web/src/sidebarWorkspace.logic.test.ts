@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   hermesInstanceIds,
   nextSidebarWorkspace,
+  resolveGestureAxis,
   resolveWorkspaceLandingThread,
   threadBelongsToWorkspace,
 } from "./sidebarWorkspace.logic";
@@ -94,5 +95,18 @@ describe("resolveWorkspaceLandingThread", () => {
         remembered: undefined,
       }),
     ).toBeNull();
+  });
+});
+
+describe("resolveGestureAxis", () => {
+  it("waits for enough travel, then locks to the dominant axis", () => {
+    expect(resolveGestureAxis(4, 3)).toBe("pending");
+    expect(resolveGestureAxis(24, 4)).toBe("horizontal");
+    expect(resolveGestureAxis(-24, 4)).toBe("horizontal");
+    expect(resolveGestureAxis(3, 30)).toBe("vertical");
+  });
+
+  it("treats a diagonal, drifting scroll as vertical", () => {
+    expect(resolveGestureAxis(14, 10)).toBe("vertical");
   });
 });
