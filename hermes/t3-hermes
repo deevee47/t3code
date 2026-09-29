@@ -82,6 +82,22 @@ install_staged() {
   open -a "$APP_PATH" || true
 }
 
+# Quitting T3 also closes T3's built-in terminal and everything running in it, so
+# the swap runs in its own session, detached from whatever terminal started it.
+cmd_install() {
+  [[ -d "$STAGED" ]] || fail "No build is waiting to be installed. Run: t3-hermes update"
+  if ! app_running; then
+    install_staged
+    return
+  fi
+  local log="${WORK}/install.log"
+  nohup perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' \
+    /bin/bash "$SELF" __install-detached >"$log" 2>&1 </dev/null &
+  disown || true
+  say "Installing in the background: ${APP_NAME} will quit and reopen with Hermes in a few seconds."
+  say "Progress: ${log}"
+}
+
 stage_build() {
   local version="$1" dmg mount
   dmg="$(ls -t "${WORK}/release/"*.dmg 2>/dev/null | head -1)"
@@ -229,7 +245,8 @@ EOF
 
 case "${1:-}" in
   update) shift; cmd_update "$@" ;;
-  install) install_staged ;;
+  install) cmd_install ;;
+  __install-detached) install_staged && notify "Now running T3 Code with Hermes." ;;
   status) cmd_status ;;
   schedule) shift; cmd_schedule "$@" ;;
   link) link_cli; say "Linked t3 and t3-hermes into ~/.local/bin." ;;
