@@ -2,7 +2,8 @@
 # t3-hermes — keep the Hermes build of T3 Code on top of the latest T3 Code release.
 #
 #   t3-hermes update [--nightly] [--force]   rebase the Hermes patch onto the newest upstream
-#                                            release, build it, and install it
+#                                            release, build it, and install it (if the app is
+#                                            open, the build waits for `t3-hermes install`)
 #   t3-hermes install                        install the last build (quits the app first)
 #   t3-hermes status                         show the installed base and the newest release
 #   t3-hermes schedule on|off                check for updates every day at 10:00
@@ -137,7 +138,7 @@ cmd_update() {
 
   if [[ $nightly == 0 && "$base" == "$target" && $force == 0 ]]; then
     say "Already on the newest release (${target})."
-    [[ -d "$STAGED" ]] && ! app_running && install_staged
+    if [[ -d "$STAGED" ]] && ! app_running; then install_staged; fi
     return 0
   fi
 
@@ -171,7 +172,8 @@ cmd_update() {
   link_cli
   git push -q --force-with-lease origin "$BRANCH" 2>/dev/null || say "(Could not push to your fork; continuing.)"
 
-  if app_running && [[ "${T3_HERMES_UNATTENDED:-}" == "1" ]]; then
+  # Never quit a running app mid-work; `t3-hermes install` does that when asked.
+  if app_running; then
     notify "T3 Code ${target} with Hermes is ready. Run: t3-hermes install"
     say "Staged ${target}. It installs the next time the app is closed, or run: t3-hermes install"
     return 0
