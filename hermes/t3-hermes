@@ -123,8 +123,32 @@ stage_build() {
   # Without an update feed the app's own updater stays off, so it can never
   # replace this build with the official one.
   rm -f "${STAGED}/Contents/Resources/app-update.yml"
-  codesign --force --deep --sign - "$STAGED" >/dev/null 2>&1 || true
+  sign_app "$STAGED"
   echo "$version" >"${WORK}/staged-version"
+}
+
+# macOS keys Keychain "Always Allow" and privacy permissions to the app's signature.
+# An ad-hoc signature changes with every build, so each update would ask again; a
+# certificate gives every build the same identity, so you answer once.
+signing_identity() {
+  if [[ -n "${T3_HERMES_SIGN_IDENTITY:-}" ]]; then
+    echo "$T3_HERMES_SIGN_IDENTITY"
+    return
+  fi
+  security find-identity -v -p codesigning 2>/dev/null |
+    grep -E '"(Apple Development|Developer ID Application|T3 Hermes Local)' |
+    head -1 | awk '{print $2}'
+}
+
+sign_app() {
+  local app="$1" identity
+  identity="$(signing_identity)"
+  if [[ -z "$identity" ]]; then
+    say "(No code-signing certificate found; macOS will ask for permissions again after updates.)"
+    identity="-"
+  fi
+  codesign --force --deep --sign "$identity" "$app" >/dev/null 2>&1 ||
+    codesign --force --deep --sign - "$app" >/dev/null 2>&1 || true
 }
 
 link_cli() {
@@ -264,5 +288,13 @@ case "${1:-}" in
   schedule) shift; cmd_schedule "$@" ;;
   link) link_cli; say "Linked t3 and t3-hermes into ~/.local/bin." ;;
   stage) load_toolchain; stage_build "$(current_base)" ;;
+  resign)
+    # Stage a copy of the installed app with the stable signature; install swaps it in.
+    rm -rf "$STAGED"
+    ditto "$APP_PATH" "$STAGED"
+    sign_app "$STAGED"
+    current_base >"${WORK}/staged-version"
+    cmd_install
+    ;;
   *) sed -n '2,11p' "$SELF" | sed 's/^# \{0,1\}//' ;;
 esac

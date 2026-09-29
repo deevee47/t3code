@@ -29,5 +29,9 @@ build. If a release conflicts with the patch or fails to build, nothing is insta
 current app keeps working. Resolve the conflict by rebasing the `hermes` branch onto the new
 tag, then run `t3-hermes update` again.
 
+Builds are signed with your Apple Development certificate when you have one, so macOS sees
+every update as the same app: Keychain "Always Allow" and privacy permissions are asked once.
+Set `T3_HERMES_SIGN_IDENTITY` to use a different certificate.
+
 The previous app is kept at `~/.t3-hermes-build/previous.app`. To go back to the official T3
 Code, download it from https://t3.codes and replace the app in `/Applications`.
