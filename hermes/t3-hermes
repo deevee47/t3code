@@ -12,14 +12,27 @@
 # installed: the current app keeps working and the branch is restored.
 set -euo pipefail
 
+# Real path of this script, following the ~/.local/bin link.
+resolve_self() {
+  local path="$1" target
+  while [[ -L "$path" ]]; do
+    target="$(readlink "$path")"
+    [[ "$target" == /* ]] && path="$target" || path="$(dirname "$path")/${target}"
+  done
+  echo "$(cd "$(dirname "$path")" && pwd)/$(basename "$path")"
+}
+
 # The repo is rewritten during an update, so run from a private copy of this script.
-if [[ "${T3_HERMES_REEXEC:-}" != "1" ]]; then
+# The real path travels as an argument: environment variables would leak into the
+# T3 app when the install step reopens it.
+if [[ "${1:-}" != "__reexec" ]]; then
   copy="$(mktemp -t t3-hermes)"
   cp "$0" "$copy"
-  T3_HERMES_REEXEC=1 T3_HERMES_SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")" exec bash "$copy" "$@"
+  exec bash "$copy" __reexec "$(resolve_self "$0")" "$@"
 fi
-
-SELF="${T3_HERMES_SELF}"
+SELF="$2"
+shift 2
+unset T3_HERMES_REEXEC T3_HERMES_SELF
 REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
 BRANCH="hermes"
 APP_NAME="T3 Code (Alpha)"
