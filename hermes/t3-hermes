@@ -24,6 +24,7 @@ REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
 BRANCH="hermes"
 APP_NAME="T3 Code (Alpha)"
 APP_PATH="/Applications/${APP_NAME}.app"
+BUNDLE_ID="com.t3tools.t3code"
 WORK="${HOME}/.t3-hermes-build"
 LOG="${WORK}/update.log"
 STAGED="${WORK}/staged.app"
@@ -57,14 +58,15 @@ latest_release() {
 }
 
 app_running() {
-  pgrep -xq "$APP_NAME" 2>/dev/null || pgrep -fq "/Applications/${APP_NAME}.app/Contents/MacOS/" 2>/dev/null
+  # By bundle id: the app name has parentheses, which pgrep would read as a regex.
+  [[ "$(osascript -e "application id \"${BUNDLE_ID}\" is running" 2>/dev/null)" == "true" ]]
 }
 
 install_staged() {
   [[ -d "$STAGED" ]] || fail "No build is waiting to be installed. Run: t3-hermes update"
   if app_running; then
     say "Quitting ${APP_NAME}…"
-    osascript -e "tell application \"${APP_NAME}\" to quit" >/dev/null 2>&1 || true
+    osascript -e "tell application id \"${BUNDLE_ID}\" to quit" >/dev/null 2>&1 || true
     for _ in $(seq 1 30); do app_running || break; sleep 1; done
     app_running && fail "${APP_NAME} is still running. Quit it and run: t3-hermes install"
   fi
