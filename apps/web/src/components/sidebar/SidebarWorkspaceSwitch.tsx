@@ -4,8 +4,7 @@ import type * as React from "react";
 import { cn } from "../../lib/utils";
 import { nextSidebarWorkspace, type SidebarWorkspace } from "../../sidebarWorkspace.logic";
 import { useSidebarWorkspaceStore, useSwitchSidebarWorkspace } from "../../sidebarWorkspaceStore";
-import { HermesIcon } from "../Icons";
-import { T3Wordmark } from "../T3Wordmark";
+import workspaceLogoUrl from "./workspace-logo.png";
 
 /** Horizontal travel, in pixels, that commits one switch. */
 const SWIPE_THRESHOLD_PX = 60;
@@ -14,6 +13,18 @@ const GESTURE_GAP_MS = 220;
 const SLIDE_DURATION_MS = 180;
 
 const WORKSPACE_LABELS: Record<SidebarWorkspace, string> = { t3: "T3", hermes: "Hermes" };
+
+const WORKSPACE_LOGO_MASK = {
+  maskImage: `url(${workspaceLogoUrl})`,
+  maskSize: "contain",
+  maskRepeat: "no-repeat",
+  maskPosition: "center",
+} as const;
+
+/** The logo is a mask, so it takes the button's text color in light and dark themes. */
+function WorkspaceLogo() {
+  return <span aria-hidden className="size-4 shrink-0 bg-current" style={WORKSPACE_LOGO_MASK} />;
+}
 
 /** T3 / Hermes toggle for the right side of the sidebar header. */
 export const SidebarWorkspaceSwitch = memo(function SidebarWorkspaceSwitch() {
@@ -40,12 +51,8 @@ export const SidebarWorkspaceSwitch = memo(function SidebarWorkspaceSwitch() {
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          {value === "t3" ? (
-            <T3Wordmark aria-hidden className="h-[1cap] w-auto" />
-          ) : (
-            <HermesIcon aria-hidden className="size-3" />
-          )}
-          <span className={value === "t3" ? "sr-only" : undefined}>{WORKSPACE_LABELS[value]}</span>
+          {value === "hermes" ? <WorkspaceLogo /> : null}
+          <span>{WORKSPACE_LABELS[value]}</span>
         </button>
       ))}
     </div>
