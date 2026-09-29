@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - fixtures build a real SQLite file on disk.
 import * as NodeFS from "node:fs";
 import * as NodeSqlite from "node:sqlite";
 import * as NodeOS from "node:os";
