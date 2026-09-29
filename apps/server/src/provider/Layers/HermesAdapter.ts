@@ -50,7 +50,7 @@ import {
 } from "../Errors.ts";
 import { buildRuntimeInstructions } from "../RuntimeInstructions.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
-import { acpPermissionOutcome, mapAcpToAdapterError } from "../acp/AcpAdapterSupport.ts";
+import { mapAcpToAdapterError } from "../acp/AcpAdapterSupport.ts";
 import {
   makeAcpAssistantItemEvent,
   makeAcpContentDeltaEvent,
@@ -67,6 +67,7 @@ import {
   currentHermesModelIdFromSessionSetup,
   hermesModeIdForRuntimeMode,
   makeHermesAcpRuntime,
+  selectHermesPermissionOptionId,
   setHermesSessionMode,
 } from "../acp/HermesAcpSupport.ts";
 import type { EventNdjsonLogger } from "./EventNdjsonLogger.ts";
@@ -123,16 +124,6 @@ function parseHermesResume(raw: unknown): string | undefined {
   return typeof record.sessionId === "string" && record.sessionId.trim()
     ? record.sessionId.trim()
     : undefined;
-}
-
-function selectAutoApprovedPermissionOption(
-  request: EffectAcpSchema.RequestPermissionRequest,
-): string | undefined {
-  for (const kind of ["allow_always", "allow_once"] as const) {
-    const optionId = request.options.find((option) => option.kind === kind)?.optionId?.trim();
-    if (optionId) return optionId;
-  }
-  return undefined;
 }
 
 function settlePendingApprovalsAsCancelled(
@@ -306,7 +297,7 @@ export function makeHermesAdapter(hermesSettings: HermesSettings, options?: Herm
             yield* acp.handleRequestPermission((params) =>
               Effect.gen(function* () {
                 if (input.runtimeMode === "full-access") {
-                  const optionId = selectAutoApprovedPermissionOption(params);
+                  const optionId = selectHermesPermissionOptionId(params, "acceptForSession");
                   if (optionId !== undefined) {
                     return { outcome: { outcome: "selected" as const, optionId } };
                   }
@@ -354,11 +345,15 @@ export function makeHermesAdapter(hermesSettings: HermesSettings, options?: Herm
                     decision: resolved,
                   }),
                 );
+                const optionId =
+                  resolved === "cancel"
+                    ? undefined
+                    : selectHermesPermissionOptionId(params, resolved);
                 return {
                   outcome:
-                    resolved === "cancel"
+                    optionId === undefined
                       ? ({ outcome: "cancelled" } as const)
-                      : { outcome: "selected" as const, optionId: acpPermissionOutcome(resolved) },
+                      : { outcome: "selected" as const, optionId },
                 };
               }).pipe(Effect.orDie),
             );

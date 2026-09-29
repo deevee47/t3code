@@ -1,4 +1,9 @@
-import { HERMES_DEFAULT_MODEL, type HermesSettings, type RuntimeMode } from "@t3tools/contracts";
+import {
+  HERMES_DEFAULT_MODEL,
+  type HermesSettings,
+  type ProviderApprovalDecision,
+  type RuntimeMode,
+} from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -117,4 +122,29 @@ export function setHermesSessionMode(
   modeId: string,
 ): Effect.Effect<void, EffectAcpErrors.AcpError> {
   return runtime.request("session/set_mode", { sessionId, modeId }).pipe(Effect.asVoid);
+}
+
+/**
+ * Picks the Hermes permission option for a T3 decision. Hermes names its options
+ * `allow_once`, `allow_session`, `allow_always`, `deny` and `deny_always`; a session-wide
+ * approval must not select the permanent `allow_always`.
+ */
+export function selectHermesPermissionOptionId(
+  request: EffectAcpSchema.RequestPermissionRequest,
+  decision: Exclude<ProviderApprovalDecision, "cancel">,
+): string | undefined {
+  const byId = (optionId: string) =>
+    request.options.find((option) => option.optionId === optionId)?.optionId;
+  const byKind = (kind: EffectAcpSchema.PermissionOptionKind) =>
+    request.options.find((option) => option.kind === kind)?.optionId;
+  switch (decision) {
+    case "acceptAlways":
+      return byId("allow_always") ?? byKind("allow_always") ?? byId("allow_session");
+    case "acceptForSession":
+      return byId("allow_session") ?? byId("allow_once") ?? byKind("allow_once");
+    case "accept":
+      return byId("allow_once") ?? byKind("allow_once");
+    case "decline":
+      return byId("deny") ?? byKind("reject_once");
+  }
 }
